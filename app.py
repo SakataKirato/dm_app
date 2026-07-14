@@ -67,8 +67,12 @@ def fetch_filter_options(
         date_query += ' WHERE arena_id = ? AND category = ?'
         date_params = (arena_id, category)
     date_query += ' ORDER BY leaderboard_publish_date DESC'
+    arenas = db.execute('SELECT * FROM arenas ORDER BY arena_name').fetchall()
     return {
-        'arenas': db.execute('SELECT * FROM arenas ORDER BY arena_name').fetchall(),
+        'arenas': arenas,
+        'arena_menu': [
+            {'id': row['arena_id'], 'name': row['arena_name']} for row in arenas
+        ],
         'organizations': db.execute(
             'SELECT * FROM organizations ORDER BY organization_name'
         ).fetchall(),
@@ -139,6 +143,12 @@ def pagination_links(current_page: int, total_pages: int) -> list[int | None]:
 def index() -> str:
     """絞り込み可能なランキング一覧を表示する。"""
     keyword = request.args.get('q', default='', type=str).strip()
+    sort = request.args.get('sort', default='rank', type=str)
+    direction = request.args.get('direction', default='desc', type=str)
+    if sort not in {'rank', 'rating', 'vote_count'}:
+        sort = 'rank'
+    if direction not in {'asc', 'desc'}:
+        direction = 'desc'
     filters = {
         'arena': request.args.get('arena', type=int),
         'organization': request.args.get('organization', type=int),
@@ -146,6 +156,8 @@ def index() -> str:
         'category': request.args.get('category', default='', type=str).strip(),
         'date': request.args.get('date', default='', type=str).strip(),
         'q': keyword,
+        'sort': sort,
+        'direction': direction,
     }
     apply_default_leaderboard_filters(filters)
     db = get_db()
@@ -181,6 +193,13 @@ def index() -> str:
     current_page = max(1, request.args.get('page', default=1, type=int) or 1)
     current_page = min(current_page, total_pages)
     offset = (current_page - 1) * PAGE_SIZE
+    order_by = {
+        'rank': 'r.rank ASC, r.rating DESC',
+        'rating': f'r.rating {direction.upper()}, r.rank ASC',
+        'vote_count': (
+            f'r.vote_count IS NULL ASC, r.vote_count {direction.upper()}, r.rank ASC'
+        ),
+    }[sort]
     results = db.execute(
         'WITH leaderboard_scope AS ('
         'SELECT model_id, rating_lower, rating_upper '
@@ -208,17 +227,31 @@ def index() -> str:
         'JOIN licenses l ON m.license_id = l.license_id '
         'JOIN arenas a ON r.arena_id = a.arena_id '
         'LEFT JOIN rank_spreads spread ON spread.model_id = r.model_id '
-        f'{where} ORDER BY r.rank ASC, r.rating DESC LIMIT ? OFFSET ?',
+        f'{where} ORDER BY {order_by} LIMIT ? OFFSET ?',
         [filters['arena'], filters['category'], filters['date'], *params, PAGE_SIZE, offset]
     ).fetchall()
     active_filters = {key: value for key, value in filters.items() if value}
+    sort_filters = {
+        key: value for key, value in active_filters.items()
+        if key not in {'sort', 'direction'}
+    }
+    # 未選択時は降順の矢印を表示し、最初のクリックでは昇順にする。
+    # 同じ列を続けて押した場合だけ、現在の向きと反対に切り替える。
+    sort_directions = {
+        column: (
+            'asc' if sort != column
+            else ('asc' if direction == 'desc' else 'desc')
+        )
+        for column in ('rating', 'vote_count')
+    }
     return render_template(
         'index.html', results=results, filters=filters,
         filter_options=fetch_filter_options(filters['arena'], filters['category']),
         total_records=total_records,
         current_page=current_page, total_pages=total_pages,
         page_links=pagination_links(current_page, total_pages),
-        active_filters=active_filters
+        active_filters=active_filters, sort_filters=sort_filters,
+        sort_directions=sort_directions,
     )
 
 
@@ -508,4 +541,3 @@ def license_models(license_id: int) -> str:
 def not_found(error: object) -> tuple[str, int]:
     """存在しないリソースへのアクセスを案内する。"""
     return render_template('not_found.html'), 404
-

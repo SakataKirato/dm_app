@@ -7,8 +7,8 @@
   <p>開発組織ごとの掲載モデル数、平均レート、最高レートを比較できます。</p>
 </section>
 <section class="filter-panel" aria-label="組織ランキングの絞り込み">
-  <form method="get" data-categories-by-arena='{{ filter_options.categories_by_arena|tojson }}' data-dates-by-arena-category='{{ filter_options.dates_by_arena_category|tojson }}'>
-    <label>評価対象<select name="arena" id="arena-filter">{% for item in filter_options.arenas %}<option value="{{ item.arena_id }}" {% if filters.arena == item.arena_id %}selected{% endif %}>{{ item.arena_name }}</option>{% endfor %}</select></label>
+  <form method="get" data-categories-by-arena='{{ filter_options.categories_by_arena|tojson }}' data-dates-by-arena-category='{{ filter_options.dates_by_arena_category|tojson }}' data-arena-options='{{ filter_options.arena_menu|tojson }}'>
+    {% include '_arena_picker.html' %}
     <label>カテゴリ<select name="category" id="category-filter">{% for item in filter_options.categories %}<option value="{{ item.category }}" {% if filters.category == item.category %}selected{% endif %}>{{ item.category }}</option>{% endfor %}</select></label>
     <label>公開日<select name="date" id="date-filter">{% for item in filter_options.dates %}<option value="{{ item.leaderboard_publish_date }}" {% if filters.date == item.leaderboard_publish_date %}selected{% endif %}>{{ item.leaderboard_publish_date }}</option>{% endfor %}</select></label>
     <label>ランキング指標<select name="metric">{% for value, item in ranking_metrics.items() %}<option value="{{ value }}" {% if filters.metric == value %}selected{% endif %}>{{ item[0] }}</option>{% endfor %}</select></label>

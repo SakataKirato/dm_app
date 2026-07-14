@@ -1,0 +1,10 @@
+<div class="arena-picker" data-arena-picker>
+  <div class="arena-picker-heading"><span>評価対象</span><label class="style-toggle"><input type="checkbox" id="style-control-toggle"><i></i><b>Style Control</b></label></div>
+  <input type="hidden" name="arena" id="arena-filter" value="{{ filters.arena }}">
+  <div class="arena-groups" role="group" aria-label="評価対象の種類">
+    <div class="arena-group"><button class="arena-trigger" type="button">Chat <b>⌄</b></button><div class="arena-menu"><button type="button" data-arena-base="text">Text</button><button type="button" data-arena-base="search">Search</button><button type="button" data-arena-base="vision">Vision</button><button type="button" data-arena-base="document">Document</button></div></div>
+    <div class="arena-group"><button class="arena-trigger" type="button">Code <b>⌄</b></button><div class="arena-menu"><button type="button" data-arena-base="webdev">Webdev</button></div></div>
+    <div class="arena-group"><button class="arena-trigger" type="button">Image <b>⌄</b></button><div class="arena-menu"><button type="button" data-arena-base="text_to_image">Text to Image</button><button type="button" data-arena-base="image_edit">Image Edit</button></div></div>
+    <div class="arena-group"><button class="arena-trigger" type="button">Video <b>⌄</b></button><div class="arena-menu"><button type="button" data-arena-base="text_to_video">Text to Video</button><button type="button" data-arena-base="video_edit">Video Edit</button><button type="button" data-arena-base="image_to_video">Image to Video</button></div></div>
+  </div>
+</div>
