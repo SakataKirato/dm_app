@@ -1,0 +1,10 @@
+AddHandler cgi-script .cgi
+Options +ExecCGI
+
+Require all denied
+Require ip 131.113. 133.27.
+Require ip 2001:df0:eb::/48 2001:df2:c900::/48
+
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^(.*)$ index.cgi/$1 [L]

@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block title %}{{ model.model_name }} | ModelScope{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('index') }}">← Leaderboardへ戻る</a>
+<section class="detail-hero"><p class="eyebrow">MODEL PROFILE</p><h1>{{ model.model_name }}</h1><div class="metadata"><span>{{ model.organization_name }}</span><span>{{ model.license_name }}</span></div></section>
+<section class="results-section"><div class="section-heading"><div><p class="eyebrow">EVALUATION HISTORY</p><h2>評価結果</h2></div><p>{{ results|length }} records</p></div>{% if results %}<div class="table-wrap"><table><thead><tr><th>評価対象</th><th>カテゴリ</th><th>公開日</th><th>順位</th><th>レート</th><th>範囲</th><th>投票数</th></tr></thead><tbody>{% for row in results %}<tr><td>{{ row.arena_name }}</td><td>{{ row.category }}</td><td>{{ row.leaderboard_publish_date }}</td><td><strong class="rank">{{ row.rank }}</strong></td><td class="number">{{ '%.2f'|format(row.rating) }}</td><td class="number">{{ '%.1f'|format(row.rating_lower) if row.rating_lower is not none else '—' }}{% if row.rating_upper is not none %}–{{ '%.1f'|format(row.rating_upper) }}{% endif %}</td><td class="number">{{ '{:,}'.format(row.vote_count) if row.vote_count is not none else '—' }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty"><p>このモデルの評価結果はありません。</p></div>{% endif %}</section>
+{% endblock %}

@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block title %}{{ license.license_name }} | ModelScope{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('index') }}">← Leaderboardへ戻る</a>
+<section class="detail-hero"><p class="eyebrow">LICENSE</p><h1>{{ license.license_name }}</h1><p>このライセンスで公開されているAIモデルの一覧です。</p></section>
+<section class="results-section"><div class="section-heading"><div><p class="eyebrow">MODELS</p><h2>{{ models|length }} <span>models</span></h2></div></div><div class="table-wrap"><table><thead><tr><th>モデル</th><th>開発組織</th><th>評価件数</th><th>最高レート</th></tr></thead><tbody>{% for model in models %}<tr><td><strong>{{ model.model_name }}</strong></td><td>{{ model.organization_name }}</td><td class="number">{{ model.result_count }}</td><td class="number">{{ model.max_rating if model.max_rating is not none else '—' }}</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

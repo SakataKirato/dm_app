@@ -1,0 +1,8 @@
+dataset
+leaderboard.db
+.leaderboard.building.db
+__pycache__/
+*.py[cod]
+.DS_Store
+main.pdf
+main.tex
