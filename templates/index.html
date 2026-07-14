@@ -7,7 +7,7 @@
   <!-- <p>評価対象・組織・ライセンスから、AIモデルの評価結果を横断的に検索できます。</p> -->
 </section>
 <section class="filter-panel" aria-label="ランキングの絞り込み">
-  <form method="get" data-categories-by-arena='{{ filter_options.categories_by_arena|tojson }}' data-dates-by-arena-category='{{ filter_options.dates_by_arena_category|tojson }}' data-arena-options='{{ filter_options.arena_menu|tojson }}'>
+  <form method="get" data-main-leaderboard data-categories-by-arena='{{ filter_options.categories_by_arena|tojson }}' data-dates-by-arena-category='{{ filter_options.dates_by_arena_category|tojson }}' data-arena-options='{{ filter_options.arena_menu|tojson }}'>
     <label class="model-filter">モデル名<input name="q" value="{{ filters.q }}" placeholder="モデル名を入力"></label>
     {% include '_arena_picker.html' %}
     <label class="organization-filter">組織<select name="organization"><option value="">すべて</option>{% for item in filter_options.organizations %}<option value="{{ item.organization_id }}" {% if filters.organization == item.organization_id %}selected{% endif %}>{{ item.organization_name }}</option>{% endfor %}</select></label>

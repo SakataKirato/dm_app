@@ -40,8 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const styleToggle = form.querySelector('#style-control-toggle');
   let resultsSection = document.querySelector('.results-section');
   let isLoading = false;
-  const isMainLeaderboard = window.location.pathname === '/';
-  const isAggregateLeaderboard = ['/organizations', '/licenses'].includes(window.location.pathname);
+  const isMainLeaderboard = form.hasAttribute('data-main-leaderboard');
+  const isAggregateLeaderboard = form.hasAttribute('data-aggregate-leaderboard');
 
   const updateCategoryOptions = () => {
     const selectedCategory = categorySelect.value;
@@ -108,7 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const loadLeaderboard = async (url, pushHistory = true) => {
     if (isLoading) return;
     const targetUrl = new URL(url, window.location.origin);
-    const apiUrl = new URL('/api/leaderboard', window.location.origin);
+    const apiUrl = new URL('api/leaderboard', form.action || window.location.href);
     apiUrl.search = targetUrl.search;
     isLoading = true;
     resultsSection.classList.add('is-loading');
@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!event.target.matches('.page-jump form')) return;
     if (!isMainLeaderboard && !isAggregateLeaderboard) return;
     event.preventDefault();
-    const targetUrl = new URL(window.location.pathname, window.location.origin);
+    const targetUrl = new URL(form.action || window.location.href, window.location.origin);
     targetUrl.search = new URLSearchParams(new FormData(event.target)).toString();
     if (isMainLeaderboard) loadLeaderboard(targetUrl);
     else loadAggregateLeaderboard(targetUrl);

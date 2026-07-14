@@ -7,7 +7,7 @@
   <!-- <p>ライセンスごとの掲載モデル数、平均レート、最高レートを比較できます。</p> -->
 </section>
 <section class="filter-panel compact-leaderboard-filter" aria-label="ライセンスランキングの絞り込み">
-  <form method="get" data-categories-by-arena='{{ filter_options.categories_by_arena|tojson }}' data-dates-by-arena-category='{{ filter_options.dates_by_arena_category|tojson }}' data-arena-options='{{ filter_options.arena_menu|tojson }}'>
+  <form method="get" data-aggregate-leaderboard data-categories-by-arena='{{ filter_options.categories_by_arena|tojson }}' data-dates-by-arena-category='{{ filter_options.dates_by_arena_category|tojson }}' data-arena-options='{{ filter_options.arena_menu|tojson }}'>
     {% include '_arena_picker.html' %}
     <label>カテゴリ<select name="category" id="category-filter">{% for item in filter_options.categories %}<option value="{{ item.category }}" {% if filters.category == item.category %}selected{% endif %}>{{ item.category }}</option>{% endfor %}</select></label>
     <label>公開日<select name="date" id="date-filter">{% for item in filter_options.dates %}<option value="{{ item.leaderboard_publish_date }}" {% if filters.date == item.leaderboard_publish_date %}selected{% endif %}>{{ item.leaderboard_publish_date }}</option>{% endfor %}</select></label>
