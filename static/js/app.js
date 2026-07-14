@@ -40,6 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const styleToggle = form.querySelector('#style-control-toggle');
   let resultsSection = document.querySelector('.results-section');
   let isLoading = false;
+  const isMainLeaderboard = window.location.pathname === '/';
+  const isAggregateLeaderboard = ['/organizations', '/licenses'].includes(window.location.pathname);
 
   const updateCategoryOptions = () => {
     const selectedCategory = categorySelect.value;
@@ -125,7 +127,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  const loadAggregateLeaderboard = async (url, pushHistory = true) => {
+    if (isLoading) return;
+    const targetUrl = new URL(url, window.location.origin);
+    isLoading = true;
+    resultsSection.classList.add('is-loading');
+    try {
+      const response = await fetch(targetUrl, { headers: { Accept: 'text/html' } });
+      if (!response.ok) throw new Error('Request failed');
+      const documentResponse = new DOMParser().parseFromString(await response.text(), 'text/html');
+      const nextResults = documentResponse.querySelector('.results-section');
+      if (!nextResults) throw new Error('Results not found');
+      resultsSection.outerHTML = nextResults.outerHTML;
+      resultsSection = document.querySelector('.results-section');
+      if (pushHistory) history.pushState({}, '', `${targetUrl.pathname}${targetUrl.search}`);
+    } catch (_error) {
+      window.location.assign(targetUrl);
+    } finally {
+      isLoading = false;
+    }
+  };
+
   form.addEventListener('submit', (event) => {
+    if (!isMainLeaderboard) return;
     event.preventDefault();
     const targetUrl = new URL(form.action || window.location.href, window.location.origin);
     targetUrl.search = new URLSearchParams(new FormData(form)).toString();
@@ -134,12 +158,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.addEventListener('click', (event) => {
     const link = event.target.closest('.results-section .sort-link, .results-section .pagination a');
-    if (link) {
+    if ((isMainLeaderboard || isAggregateLeaderboard) && link) {
       event.preventDefault();
-      loadLeaderboard(link.href);
+      if (isMainLeaderboard) loadLeaderboard(link.href);
+      else loadAggregateLeaderboard(link.href);
     }
     const resetLink = event.target.closest('.filter-actions a');
-    if (resetLink) {
+    if (isMainLeaderboard && resetLink) {
       event.preventDefault();
       loadLeaderboard(resetLink.href);
     }
@@ -154,12 +179,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.addEventListener('submit', (event) => {
     if (!event.target.matches('.page-jump form')) return;
+    if (!isMainLeaderboard && !isAggregateLeaderboard) return;
     event.preventDefault();
-    const targetUrl = new URL('/', window.location.origin);
+    const targetUrl = new URL(window.location.pathname, window.location.origin);
     targetUrl.search = new URLSearchParams(new FormData(event.target)).toString();
-    loadLeaderboard(targetUrl);
+    if (isMainLeaderboard) loadLeaderboard(targetUrl);
+    else loadAggregateLeaderboard(targetUrl);
   });
-  window.addEventListener('popstate', () => loadLeaderboard(window.location.href, false));
+  if (isMainLeaderboard || isAggregateLeaderboard) {
+    window.addEventListener('popstate', () => {
+      if (isMainLeaderboard) loadLeaderboard(window.location.href, false);
+      else loadAggregateLeaderboard(window.location.href, false);
+    });
+  }
 
   if (arenaPicker) {
     const closeOtherArenaGroups = (currentGroup) => {

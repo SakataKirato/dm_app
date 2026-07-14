@@ -37,7 +37,8 @@ def fetch_filter_options(
     db = get_db()
     category_rows = db.execute(
         'SELECT arena_id, category FROM leaderboard_results '
-        'GROUP BY arena_id, category ORDER BY arena_id, category'
+        'GROUP BY arena_id, category '
+        "ORDER BY arena_id, CASE WHEN category = 'overall' THEN 0 ELSE 1 END, category"
     ).fetchall()
     categories_by_arena: dict[int, list[str]] = {}
     for row in category_rows:
@@ -60,7 +61,7 @@ def fetch_filter_options(
     if arena_id is not None:
         category_query += ' WHERE arena_id = ?'
         category_params = (arena_id,)
-    category_query += ' ORDER BY category'
+    category_query += " ORDER BY CASE WHEN category = 'overall' THEN 0 ELSE 1 END, category"
     date_query = 'SELECT DISTINCT leaderboard_publish_date FROM leaderboard_results'
     date_params: tuple[object, ...] = ()
     if arena_id is not None and category:
@@ -152,10 +153,10 @@ def pagination_links(current_page: int, total_pages: int) -> list[int | None]:
 def leaderboard_context() -> dict[str, object]:
     """ランキング一覧と、その表示に必要な値を取得する。"""
     keyword = request.args.get('q', default='', type=str).strip()
-    sort = request.args.get('sort', default='rank', type=str)
+    sort = request.args.get('sort', default='rating', type=str)
     direction = request.args.get('direction', default='desc', type=str)
     if sort not in {'rank', 'rating', 'vote_count'}:
-        sort = 'rank'
+        sort = 'rating'
     if direction not in {'asc', 'desc'}:
         direction = 'desc'
     filters = {
@@ -315,13 +316,17 @@ def organization_leaderboard() -> str:
         'max_rating': ('最高レート', 'max_rating DESC, avg_rating DESC, model_count DESC'),
     }
     metric = request.args.get('metric', default='avg_rating', type=str)
+    direction = request.args.get('direction', default='desc', type=str)
     if metric not in ranking_metrics:
         metric = 'avg_rating'
+    if direction not in {'asc', 'desc'}:
+        direction = 'desc'
     filters = {
         'arena': request.args.get('arena', type=int),
         'category': request.args.get('category', default='', type=str).strip(),
         'date': request.args.get('date', default='', type=str).strip(),
         'metric': metric,
+        'direction': direction,
     }
     apply_default_leaderboard_filters(filters)
     clauses: list[str] = []
@@ -362,7 +367,7 @@ def organization_leaderboard() -> str:
         'JOIN arenas a ON a.arena_name = v.arena_name '
         f'{where} '
         'GROUP BY o.organization_id, v.organization_name '
-        f'ORDER BY {ranking_metrics[metric][1]}, v.organization_name '
+        f'ORDER BY {metric} {direction.upper()}, v.organization_name '
         'LIMIT ? OFFSET ?',
         [*params, PAGE_SIZE, offset],
     ).fetchall()
@@ -397,6 +402,17 @@ def organization_leaderboard() -> str:
         for row in model_rows:
             models_by_organization.setdefault(row['organization_id'], []).append(row)
     active_filters = {key: value for key, value in filters.items() if value}
+    sort_filters = {
+        key: value for key, value in active_filters.items()
+        if key not in {'metric', 'direction'}
+    }
+    sort_directions = {
+        column: (
+            'asc' if metric != column
+            else ('asc' if direction == 'desc' else 'desc')
+        )
+        for column in ranking_metrics
+    }
     return render_template(
         'organization_leaderboard.html', organizations=organizations,
         models_by_organization=models_by_organization,
@@ -407,6 +423,7 @@ def organization_leaderboard() -> str:
         page_links=pagination_links(current_page, total_pages),
         active_filters=active_filters,
         ranking_metrics=ranking_metrics,
+        sort_filters=sort_filters, sort_directions=sort_directions,
     )
 
 
@@ -449,13 +466,17 @@ def license_leaderboard() -> str:
         'max_rating': ('最高レート', 'max_rating DESC, avg_rating DESC, model_count DESC'),
     }
     metric = request.args.get('metric', default='avg_rating', type=str)
+    direction = request.args.get('direction', default='desc', type=str)
     if metric not in ranking_metrics:
         metric = 'avg_rating'
+    if direction not in {'asc', 'desc'}:
+        direction = 'desc'
     filters = {
         'arena': request.args.get('arena', type=int),
         'category': request.args.get('category', default='', type=str).strip(),
         'date': request.args.get('date', default='', type=str).strip(),
         'metric': metric,
+        'direction': direction,
     }
     apply_default_leaderboard_filters(filters)
     clauses: list[str] = []
@@ -496,7 +517,7 @@ def license_leaderboard() -> str:
         'JOIN arenas a ON a.arena_name = v.arena_name '
         f'{where} '
         'GROUP BY l.license_id, v.license_name '
-        f'ORDER BY {ranking_metrics[metric][1]}, v.license_name '
+        f'ORDER BY {metric} {direction.upper()}, v.license_name '
         'LIMIT ? OFFSET ?',
         [*params, PAGE_SIZE, offset],
     ).fetchall()
@@ -532,6 +553,17 @@ def license_leaderboard() -> str:
         for row in model_rows:
             models_by_license.setdefault(row['license_id'], []).append(row)
     active_filters = {key: value for key, value in filters.items() if value}
+    sort_filters = {
+        key: value for key, value in active_filters.items()
+        if key not in {'metric', 'direction'}
+    }
+    sort_directions = {
+        column: (
+            'asc' if metric != column
+            else ('asc' if direction == 'desc' else 'desc')
+        )
+        for column in ranking_metrics
+    }
     return render_template(
         'license_leaderboard.html', licenses=licenses, filters=filters,
         models_by_license=models_by_license,
@@ -540,6 +572,7 @@ def license_leaderboard() -> str:
         total_pages=total_pages,
         page_links=pagination_links(current_page, total_pages),
         active_filters=active_filters, ranking_metrics=ranking_metrics,
+        sort_filters=sort_filters, sort_directions=sort_directions,
     )
 
 
