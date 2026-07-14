@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 
-from flask import Flask, abort, g, render_template, request
+from flask import Flask, abort, g, jsonify, render_template, request
 
 
 DATABASE = Path(__file__).with_name('leaderboard.db')
@@ -94,6 +94,10 @@ def apply_default_leaderboard_filters(filters: dict[str, object]) -> None:
         ).fetchone()
     if arena is None:
         arena = db.execute(
+            'SELECT arena_id FROM arenas WHERE arena_name = ?', ('text',)
+        ).fetchone()
+    if arena is None:
+        arena = db.execute(
             'SELECT arena_id FROM arenas ORDER BY arena_name LIMIT 1'
         ).fetchone()
     filters['arena'] = arena['arena_id']
@@ -103,6 +107,12 @@ def apply_default_leaderboard_filters(filters: dict[str, object]) -> None:
         'WHERE arena_id = ? AND category = ? LIMIT 1',
         (filters['arena'], filters['category']),
     ).fetchone() if filters['category'] else None
+    if category is None:
+        category = db.execute(
+            'SELECT DISTINCT category FROM leaderboard_results '
+            'WHERE arena_id = ? AND category = ? LIMIT 1',
+            (filters['arena'], 'overall'),
+        ).fetchone()
     if category is None:
         category = db.execute(
             'SELECT DISTINCT category FROM leaderboard_results '
@@ -139,9 +149,8 @@ def pagination_links(current_page: int, total_pages: int) -> list[int | None]:
     return links
 
 
-@app.route('/')
-def index() -> str:
-    """絞り込み可能なランキング一覧を表示する。"""
+def leaderboard_context() -> dict[str, object]:
+    """ランキング一覧と、その表示に必要な値を取得する。"""
     keyword = request.args.get('q', default='', type=str).strip()
     sort = request.args.get('sort', default='rank', type=str)
     direction = request.args.get('direction', default='desc', type=str)
@@ -244,14 +253,33 @@ def index() -> str:
         )
         for column in ('rating', 'vote_count')
     }
-    return render_template(
-        'index.html', results=results, filters=filters,
-        filter_options=fetch_filter_options(filters['arena'], filters['category']),
-        total_records=total_records,
-        current_page=current_page, total_pages=total_pages,
-        page_links=pagination_links(current_page, total_pages),
-        active_filters=active_filters, sort_filters=sort_filters,
-        sort_directions=sort_directions,
+    return {
+        'results': results,
+        'filters': filters,
+        'filter_options': fetch_filter_options(filters['arena'], filters['category']),
+        'total_records': total_records,
+        'current_page': current_page,
+        'total_pages': total_pages,
+        'page_links': pagination_links(current_page, total_pages),
+        'active_filters': active_filters,
+        'sort_filters': sort_filters,
+        'sort_directions': sort_directions,
+    }
+
+
+@app.route('/')
+def index() -> str:
+    """絞り込み可能なランキング一覧を表示する。"""
+    return render_template('index.html', **leaderboard_context())
+
+
+@app.route('/api/leaderboard')
+def leaderboard_api():
+    """画面を再読み込みせずに一覧部分を更新するための応答。"""
+    context = leaderboard_context()
+    return jsonify(
+        html=render_template('_leaderboard_results.html', **context),
+        filters=context['filters'],
     )
 
 
