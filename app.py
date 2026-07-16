@@ -56,18 +56,14 @@ def fetch_filter_options(
             row['category'], []
         ).append(row['leaderboard_publish_date'])
 
-    category_query = 'SELECT DISTINCT category FROM leaderboard_results'
-    category_params: tuple[object, ...] = ()
-    if arena_id is not None:
-        category_query += ' WHERE arena_id = ?'
-        category_params = (arena_id,)
-    category_query += " ORDER BY CASE WHEN category = 'overall' THEN 0 ELSE 1 END, category"
-    date_query = 'SELECT DISTINCT leaderboard_publish_date FROM leaderboard_results'
-    date_params: tuple[object, ...] = ()
-    if arena_id is not None and category:
-        date_query += ' WHERE arena_id = ? AND category = ?'
-        date_params = (arena_id, category)
-    date_query += ' ORDER BY leaderboard_publish_date DESC'
+    categories = [
+        {'category': item}
+        for item in categories_by_arena.get(arena_id, [])
+    ]
+    dates = [
+        {'leaderboard_publish_date': item}
+        for item in dates_by_arena_category.get(arena_id, {}).get(category, [])
+    ]
     arenas = db.execute('SELECT * FROM arenas ORDER BY arena_name').fetchall()
     return {
         'arenas': arenas,
@@ -78,10 +74,10 @@ def fetch_filter_options(
             'SELECT * FROM organizations ORDER BY organization_name'
         ).fetchall(),
         'licenses': db.execute('SELECT * FROM licenses ORDER BY license_name').fetchall(),
-        'categories': db.execute(category_query, category_params).fetchall(),
+        'categories': categories,
         'categories_by_arena': categories_by_arena,
         'dates_by_arena_category': dates_by_arena_category,
-        'dates': db.execute(date_query, date_params).fetchall(),
+        'dates': dates,
     }
 
 
@@ -282,29 +278,6 @@ def leaderboard_api():
         html=render_template('_leaderboard_results.html', **context),
         filters=context['filters'],
     )
-
-
-@app.route('/models/<int:model_id>')
-def model_detail(model_id: int) -> str:
-    """モデルの基本情報と全評価結果を表示する。"""
-    db = get_db()
-    model = db.execute(
-        'SELECT m.model_id, m.model_name, o.organization_name, l.license_name '
-        'FROM models m '
-        'JOIN organizations o ON m.organization_id = o.organization_id '
-        'JOIN licenses l ON m.license_id = l.license_id '
-        'WHERE m.model_id = ?', (model_id,)
-    ).fetchone()
-    if model is None:
-        abort(404)
-    results = db.execute(
-        'SELECT a.arena_name, r.category, r.leaderboard_publish_date, r.rank, '
-        'r.rating, r.rating_lower, r.rating_upper, r.vote_count '
-        'FROM leaderboard_results r JOIN arenas a ON r.arena_id = a.arena_id '
-        'WHERE r.model_id = ? ORDER BY r.leaderboard_publish_date DESC, r.rank',
-        (model_id,)
-    ).fetchall()
-    return render_template('model_detail.html', model=model, results=results)
 
 
 @app.route('/organizations')

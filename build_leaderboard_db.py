@@ -74,6 +74,9 @@ def create_tables(connection: sqlite3.Connection) -> None:
     );
     CREATE INDEX idx_results_rank_rating ON leaderboard_results(rank, rating DESC);
     CREATE INDEX idx_results_variance ON leaderboard_results(variance DESC);
+    CREATE INDEX idx_results_filter ON leaderboard_results(
+      arena_id, category, leaderboard_publish_date
+    );
     CREATE INDEX idx_models_organization ON models(organization_id);
     CREATE INDEX idx_models_license ON models(license_id);
     CREATE VIEW leaderboard_result_view AS
