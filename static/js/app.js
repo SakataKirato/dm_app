@@ -105,6 +105,15 @@ document.addEventListener('DOMContentLoaded', () => {
     syncArenaPicker();
   };
 
+  const syncAggregateFilterValues = (nextForm) => {
+    arenaSelect.value = nextForm.elements.arena.value;
+    updateCategoryOptions();
+    categorySelect.value = nextForm.elements.category.value;
+    updateDateOptions();
+    dateSelect.value = nextForm.elements.date.value;
+    syncArenaPicker();
+  };
+
   const loadLeaderboard = async (url, pushHistory = true) => {
     if (isLoading) return;
     const targetUrl = new URL(url, window.location.origin);
@@ -137,9 +146,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!response.ok) throw new Error('Request failed');
       const documentResponse = new DOMParser().parseFromString(await response.text(), 'text/html');
       const nextResults = documentResponse.querySelector('.results-section');
-      if (!nextResults) throw new Error('Results not found');
+      const nextForm = documentResponse.querySelector('.filter-panel form');
+      if (!nextResults || !nextForm) throw new Error('Results not found');
       resultsSection.outerHTML = nextResults.outerHTML;
       resultsSection = document.querySelector('.results-section');
+      syncAggregateFilterValues(nextForm);
       if (pushHistory) history.pushState({}, '', `${targetUrl.pathname}${targetUrl.search}`);
     } catch (_error) {
       window.location.assign(targetUrl);
@@ -149,11 +160,12 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   form.addEventListener('submit', (event) => {
-    if (!isMainLeaderboard) return;
+    if (!isMainLeaderboard && !isAggregateLeaderboard) return;
     event.preventDefault();
     const targetUrl = new URL(form.action || window.location.href, window.location.origin);
     targetUrl.search = new URLSearchParams(new FormData(form)).toString();
-    loadLeaderboard(targetUrl);
+    if (isMainLeaderboard) loadLeaderboard(targetUrl);
+    else loadAggregateLeaderboard(targetUrl);
   });
 
   document.addEventListener('click', (event) => {
@@ -164,9 +176,10 @@ document.addEventListener('DOMContentLoaded', () => {
       else loadAggregateLeaderboard(link.href);
     }
     const resetLink = event.target.closest('.filter-actions a');
-    if (isMainLeaderboard && resetLink) {
+    if ((isMainLeaderboard || isAggregateLeaderboard) && resetLink) {
       event.preventDefault();
-      loadLeaderboard(resetLink.href);
+      if (isMainLeaderboard) loadLeaderboard(resetLink.href);
+      else loadAggregateLeaderboard(resetLink.href);
     }
     if (arenaPicker) {
       if (!arenaPicker.contains(event.target)) {

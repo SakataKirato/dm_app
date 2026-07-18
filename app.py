@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 
-from flask import Flask, abort, g, jsonify, render_template, request
+from flask import Flask, g, jsonify, render_template, request
 
 
 DATABASE = Path(__file__).with_name('leaderboard.db')
@@ -30,9 +30,7 @@ def close_connection(exception: Optional[BaseException]) -> None:
         db.close()
 
 
-def fetch_filter_options(
-    arena_id: int | None = None, category: str = ''
-) -> dict[str, object]:
+def fetch_filter_options() -> dict[str, object]:
     """ランキング画面の絞り込み候補を取得する。"""
     db = get_db()
     category_rows = db.execute(
@@ -56,14 +54,6 @@ def fetch_filter_options(
             row['category'], []
         ).append(row['leaderboard_publish_date'])
 
-    categories = [
-        {'category': item}
-        for item in categories_by_arena.get(arena_id, [])
-    ]
-    dates = [
-        {'leaderboard_publish_date': item}
-        for item in dates_by_arena_category.get(arena_id, {}).get(category, [])
-    ]
     arenas = db.execute('SELECT * FROM arenas ORDER BY arena_name').fetchall()
     return {
         'arenas': arenas,
@@ -74,64 +64,39 @@ def fetch_filter_options(
             'SELECT * FROM organizations ORDER BY organization_name'
         ).fetchall(),
         'licenses': db.execute('SELECT * FROM licenses ORDER BY license_name').fetchall(),
-        'categories': categories,
+        'categories': [],
         'categories_by_arena': categories_by_arena,
         'dates_by_arena_category': dates_by_arena_category,
-        'dates': dates,
+        'dates': [],
     }
 
 
-def apply_default_leaderboard_filters(filters: dict[str, object]) -> None:
-    """評価対象・カテゴリ・公開日を常に実在する組み合わせへ正規化する。"""
-    db = get_db()
-    arena = None
-    if filters['arena']:
-        arena = db.execute(
-            'SELECT arena_id FROM arenas WHERE arena_id = ?', (filters['arena'],)
-        ).fetchone()
+def apply_default_leaderboard_filters(
+    filters: dict[str, object], filter_options: dict[str, object]
+) -> None:
+    """取得済みの選択肢から評価対象・カテゴリ・公開日を決定する。"""
+    arenas = filter_options['arenas']
+    arena = next(
+        (item for item in arenas if item['arena_id'] == filters['arena']), None
+    )
     if arena is None:
-        arena = db.execute(
-            'SELECT arena_id FROM arenas WHERE arena_name = ?', ('text',)
-        ).fetchone()
-    if arena is None:
-        arena = db.execute(
-            'SELECT arena_id FROM arenas ORDER BY arena_name LIMIT 1'
-        ).fetchone()
+        arena = next((item for item in arenas if item['arena_name'] == 'text'), arenas[0])
     filters['arena'] = arena['arena_id']
 
-    category = db.execute(
-        'SELECT category FROM leaderboard_results '
-        'WHERE arena_id = ? AND category = ? LIMIT 1',
-        (filters['arena'], filters['category']),
-    ).fetchone() if filters['category'] else None
-    if category is None:
-        category = db.execute(
-            'SELECT DISTINCT category FROM leaderboard_results '
-            'WHERE arena_id = ? AND category = ? LIMIT 1',
-            (filters['arena'], 'overall'),
-        ).fetchone()
-    if category is None:
-        category = db.execute(
-            'SELECT DISTINCT category FROM leaderboard_results '
-            'WHERE arena_id = ? ORDER BY category LIMIT 1',
-            (filters['arena'],),
-        ).fetchone()
-    filters['category'] = category['category']
+    categories_by_arena = filter_options['categories_by_arena']
+    categories = categories_by_arena[filters['arena']]
+    if filters['category'] not in categories:
+        filters['category'] = 'overall' if 'overall' in categories else categories[0]
 
-    date = db.execute(
-        'SELECT leaderboard_publish_date FROM leaderboard_results '
-        'WHERE arena_id = ? AND category = ? AND leaderboard_publish_date = ? '
-        'LIMIT 1',
-        (filters['arena'], filters['category'], filters['date']),
-    ).fetchone() if filters['date'] else None
-    if date is None:
-        date = db.execute(
-            'SELECT DISTINCT leaderboard_publish_date FROM leaderboard_results '
-            'WHERE arena_id = ? AND category = ? '
-            'ORDER BY leaderboard_publish_date DESC LIMIT 1',
-            (filters['arena'], filters['category']),
-        ).fetchone()
-    filters['date'] = date['leaderboard_publish_date']
+    dates_by_arena_category = filter_options['dates_by_arena_category']
+    dates = dates_by_arena_category[filters['arena']][filters['category']]
+    if filters['date'] not in dates:
+        filters['date'] = dates[0]
+
+    filter_options['categories'] = [{'category': item} for item in categories]
+    filter_options['dates'] = [
+        {'leaderboard_publish_date': item} for item in dates
+    ]
 
 
 def pagination_links(current_page: int, total_pages: int) -> list[int | None]:
@@ -165,7 +130,8 @@ def leaderboard_context() -> dict[str, object]:
         'sort': sort,
         'direction': direction,
     }
-    apply_default_leaderboard_filters(filters)
+    filter_options = fetch_filter_options()
+    apply_default_leaderboard_filters(filters, filter_options)
     db = get_db()
     clauses: list[str] = []
     params: list[object] = []
@@ -253,7 +219,7 @@ def leaderboard_context() -> dict[str, object]:
     return {
         'results': results,
         'filters': filters,
-        'filter_options': fetch_filter_options(filters['arena'], filters['category']),
+        'filter_options': filter_options,
         'total_records': total_records,
         'current_page': current_page,
         'total_pages': total_pages,
@@ -301,7 +267,8 @@ def organization_leaderboard() -> str:
         'metric': metric,
         'direction': direction,
     }
-    apply_default_leaderboard_filters(filters)
+    filter_options = fetch_filter_options()
+    apply_default_leaderboard_filters(filters, filter_options)
     clauses: list[str] = []
     params: list[object] = []
     column_map = {
@@ -390,43 +357,13 @@ def organization_leaderboard() -> str:
         'organization_leaderboard.html', organizations=organizations,
         models_by_organization=models_by_organization,
         filters=filters,
-        filter_options=fetch_filter_options(filters['arena'], filters['category']),
+        filter_options=filter_options,
         total_records=total_records, current_page=current_page,
         total_pages=total_pages,
         page_links=pagination_links(current_page, total_pages),
         active_filters=active_filters,
         ranking_metrics=ranking_metrics,
         sort_filters=sort_filters, sort_directions=sort_directions,
-    )
-
-
-@app.route('/organizations/<int:organization_id>')
-def organization_detail(organization_id: int) -> str:
-    """組織ごとの集計とモデルの評価結果を表示する。"""
-    db = get_db()
-    organization = db.execute(
-        'SELECT * FROM organizations WHERE organization_id = ?', (organization_id,)
-    ).fetchone()
-    if organization is None:
-        abort(404)
-    summary = db.execute(
-        'SELECT COUNT(DISTINCT m.model_id) AS model_count, '
-        'ROUND(AVG(r.rating), 2) AS avg_rating, ROUND(MAX(r.rating), 2) AS max_rating '
-        'FROM models m JOIN leaderboard_results r ON m.model_id = r.model_id '
-        'WHERE m.organization_id = ?', (organization_id,)
-    ).fetchone()
-    results = db.execute(
-        'SELECT m.model_id, m.model_name, a.arena_name, r.category, '
-        'r.leaderboard_publish_date, r.rank, r.rating, r.vote_count '
-        'FROM leaderboard_results r '
-        'JOIN models m ON r.model_id = m.model_id '
-        'JOIN arenas a ON r.arena_id = a.arena_id '
-        'WHERE m.organization_id = ? '
-        'ORDER BY r.rating DESC, r.rank ASC', (organization_id,)
-    ).fetchall()
-    return render_template(
-        'organization_detail.html', organization=organization, summary=summary,
-        results=results
     )
 
 
@@ -451,7 +388,8 @@ def license_leaderboard() -> str:
         'metric': metric,
         'direction': direction,
     }
-    apply_default_leaderboard_filters(filters)
+    filter_options = fetch_filter_options()
+    apply_default_leaderboard_filters(filters, filter_options)
     clauses: list[str] = []
     params: list[object] = []
     column_map = {
@@ -540,35 +478,13 @@ def license_leaderboard() -> str:
     return render_template(
         'license_leaderboard.html', licenses=licenses, filters=filters,
         models_by_license=models_by_license,
-        filter_options=fetch_filter_options(filters['arena'], filters['category']),
+        filter_options=filter_options,
         total_records=total_records, current_page=current_page,
         total_pages=total_pages,
         page_links=pagination_links(current_page, total_pages),
         active_filters=active_filters, ranking_metrics=ranking_metrics,
         sort_filters=sort_filters, sort_directions=sort_directions,
     )
-
-
-@app.route('/licenses/<int:license_id>')
-def license_models(license_id: int) -> str:
-    """ライセンスに対応するモデルの一覧を表示する。"""
-    db = get_db()
-    license_row = db.execute(
-        'SELECT * FROM licenses WHERE license_id = ?', (license_id,)
-    ).fetchone()
-    if license_row is None:
-        abort(404)
-    models = db.execute(
-        'SELECT m.model_id, m.model_name, o.organization_id, o.organization_name, '
-        'COUNT(r.result_id) AS result_count, ROUND(MAX(r.rating), 2) AS max_rating '
-        'FROM models m '
-        'JOIN organizations o ON m.organization_id = o.organization_id '
-        'LEFT JOIN leaderboard_results r ON m.model_id = r.model_id '
-        'WHERE m.license_id = ? '
-        'GROUP BY m.model_id, m.model_name, o.organization_id, o.organization_name '
-        'ORDER BY m.model_name', (license_id,)
-    ).fetchall()
-    return render_template('license_models.html', license=license_row, models=models)
 
 
 @app.errorhandler(404)
